@@ -1,0 +1,65 @@
+name: Desplegar Front en GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    # El despliegue solo se activará si hay cambios reales en la carpeta del front
+    paths:
+      - 'travel_assistant_front/**'
+
+# Permisos requeridos para escribir en GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Evita ejecuciones simultáneas si realizas varios commits rápidos
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Cachear dependencias agiliza los futuros despliegues
+          cache: 'npm'
+          cache-dependency-path: 'travel_assistant_front/package-lock.json'
+
+      - name: Instalar dependencias
+        working-directory: ./travel_assistant_front
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        # El comando 'echo' creará el archivo .env temporalmente en la máquina virtual
+        run: |
+          echo "VITE_API_URL=${VITE_API_URL}" > .env.production
+          npm run build
+        run: npm ci
+
+      - name: Compilar aplicación
+        working-directory: ./travel_assistant_front
+        run: npm run build
+
+      - name: Configurar Páginas de GitHub
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefactos de producción
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Le indicamos la ruta de la carpeta dist compilada dentro del monorepo
+          path: './travel_assistant_front/dist'
+
+      - name: Desplegar a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
