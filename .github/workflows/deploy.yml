@@ -39,17 +39,16 @@ jobs:
 
       - name: Instalar dependencias
         working-directory: ./travel_assistant_front
+        run: npm ci
+
+      - name: Compilar aplicación
+        working-directory: ./travel_assistant_front
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         # El comando 'echo' creará el archivo .env temporalmente en la máquina virtual
         run: |
           echo "VITE_API_URL=${VITE_API_URL}" > .env.production
           npm run build
-        run: npm ci
-
-      - name: Compilar aplicación
-        working-directory: ./travel_assistant_front
-        run: npm run build
 
       - name: Configurar Páginas de GitHub
         uses: actions/configure-pages@v4
