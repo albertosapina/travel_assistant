@@ -11,7 +11,12 @@ MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "travel_assistant")
 
 # Inicializamos el cliente asíncrono de Motor
-client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())
+client = AsyncIOMotorClient(
+    MONGO_URI,
+    tls=True,                           # Fuerza el uso explícito de TLS
+    tlsCAFile=certifi.where(),          # Inyecta los certificados actualizados de certifi
+    serverSelectionTimeoutMS=5000       # Reduce el timeout a 5s para fallar rápido si hay red muerta
+)
 db = client[DB_NAME]
 
 async def ping_database():
