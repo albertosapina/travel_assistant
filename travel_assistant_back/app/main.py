@@ -61,8 +61,11 @@ app = FastAPI(
     openapi_url=None
 )
 
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 # Configuración de CORS
 origins = [
+    frontend_url,
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]

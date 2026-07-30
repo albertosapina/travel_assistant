@@ -42,4 +42,10 @@ async def chat_stream(
             yield f"⚠️ Error en tu cuota de Google Cloud / Gemini API: {str(e)}"
             yield "[DONE]"
 
-    return EventSourceResponse(generador_gemini())
+    headers = {
+        "X-Accel-Buffering": "no",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+    }
+
+    return EventSourceResponse(generador_gemini(), headers=headers)
