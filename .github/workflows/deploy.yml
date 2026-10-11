@@ -45,9 +45,11 @@ jobs:
         working-directory: ./travel_assistant_front
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         # El comando 'echo' creará el archivo .env temporalmente en la máquina virtual
         run: |
           echo "VITE_API_URL=${VITE_API_URL}" > .env.production
+          echo "VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}" >> .env.production
           npm run build
 
       - name: Configurar Páginas de GitHub
