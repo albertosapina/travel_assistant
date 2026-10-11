@@ -103,7 +103,7 @@ const enviarMensaje = async (): Promise<void> => {
   })
 
   // 3. Preparación de variables de entorno y URLs saneadas
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const token = localStorage.getItem('google_access_token') || ''
   const cleanBaseUrl = baseUrl.replace(/\/$/, '')
 
