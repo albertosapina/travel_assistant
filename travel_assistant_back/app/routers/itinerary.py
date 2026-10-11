@@ -1,48 +1,59 @@
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Depends
 from bson import ObjectId
 from typing import List
 from app.database import db
 
 from datetime import datetime
 
-from app.schemas.itinerary import ItineraryDetail, ItineraryCreate, ItineraryListItem, ItineraryUpdate, AddUserPayload
+from app.dependencies import get_current_user_email
+from app.schemas.itinerary import ItineraryItem, ItineraryListItem, ItineraryCreate, ItineraryUpdate, AddUserPayload
 
-router = APIRouter(prefix="/itinerary", tags=["Itineraries"])
+router = APIRouter(prefix="/itinerary", tags=["Itineraries"], dependencies=[Depends(get_current_user_email)] )
 
 
-@router.post("/", response_model=ItineraryDetail, status_code=status.HTTP_201_CREATED)
-async def create_itinerary(payload: ItineraryCreate):
+@router.post("", response_model=ItineraryItem, status_code=status.HTTP_201_CREATED)
+async def create_itinerary(payload: ItineraryCreate, creator_email: str = Depends(get_current_user_email)):
     """Crea un nuevo itinerario transformando el email del creador en una lista en la BD"""
-    itinerary_dict = payload.model_dump()
+    ahora = datetime.now()
 
-    # Extraemos el email del creador y lo transformamos en la lista inicial de usuarios
-    creador = itinerary_dict.pop("creator_email")
-    itinerary_dict["users"] = [creador]
+    # Construimos el documento asumiendo la herencia de auditoría requerida
+    nuevo_itinerario = {
+        "title": payload.title,
+        "content": payload.content,
+        "users": [creator_email],  # El back transforma el string del creador en lista atómica
+        "is_default": False,
+        "created_at": ahora,
+        "updated_at": ahora
+    }
 
-    ahora = datetime.utcnow()
-    itinerary_dict["created_at"] = ahora
-    itinerary_dict["updated_at"] = ahora
+    # Inserción asíncrona no bloqueante mediante Motor
+    result = await db.itinerary.insert_one(nuevo_itinerario)
 
-    # Guardamos en la colección 'itinerary' (ya renombrada)
-    result = await db["itinerary"].insert_one(itinerary_dict)
-
-    new_itinerary = await db["itinerary"].find_one({"_id": result.inserted_id})
-    return new_itinerary
+    # Adjuntamos el ID generado para retornar el objeto completo al cliente Vue
+    nuevo_itinerario["_id"] = str(result.inserted_id)
+    return nuevo_itinerario
 
 
-@router.get("/", response_model=List[ItineraryListItem])
-async def list_itineraries(user_email: str = Query(..., description="Email del usuario para filtrar sus viajes")):
+@router.get("", response_model=List[ItineraryListItem])
+async def list_itineraries(user_email: str = Depends(get_current_user_email)):
     """Devuelve los itinerarios (ID y Título) donde el email del usuario esté autorizado"""
-    # Usamos el operador nativo de Mongo. Si 'users' es una lista,
-    # Mongo busca de forma automática si el 'user_email' coincide con algún elemento de ella.
-    cursor = db["itinerary"].find({"users": user_email}, {"title": 1})
-    itineraries = await cursor.to_list(length=100)
-    return itineraries
+    pref = await db.user_preferences.find_one({"user_email": user_email})
+    default_id = str(pref.get("default_itinerary_id")) if pref else None
+
+    cursor = db.itinerary.find({"users": user_email}, {"content": 0})
+    itinerarios = []
+
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["is_default"] = (doc["_id"] == default_id)
+        itinerarios.append(doc)
+
+    return itinerarios
 
 
-@router.get("/{itinerary_id}", response_model=ItineraryDetail)
+@router.get("/{itinerary_id}", response_model=ItineraryItem)
 async def get_itinerary_detail(itinerary_id: str,
-                               user_email: str = Query(..., description="Email para validar acceso")):
+                               user_email: str = Depends(get_current_user_email)):
     """Devuelve el detalle de un itinerario validando previamente que el usuario tenga acceso"""
     if not ObjectId.is_valid(itinerary_id):
         raise HTTPException(status_code=400, detail="El formato del ID de MongoDB no es válido")
@@ -50,6 +61,7 @@ async def get_itinerary_detail(itinerary_id: str,
     itinerary = await db["itinerary"].find_one({"_id": ObjectId(itinerary_id)})
     if not itinerary:
         raise HTTPException(status_code=404, detail="Itinerario no encontrado")
+    itinerary["_id"] = str(itinerary["_id"])
 
     # 🔒 CAPA DE SEGURIDAD INTERNA DEL BACKEND
     # Verificamos si el email que solicita el viaje se encuentra dentro de la lista 'users'
@@ -59,7 +71,7 @@ async def get_itinerary_detail(itinerary_id: str,
     return itinerary
 
 
-@router.put("/{itinerary_id}", response_model=ItineraryDetail)
+@router.put("/{itinerary_id}", response_model=ItineraryItem)
 async def update_itinerary(itinerary_id: str, payload: ItineraryUpdate):
     """Actualiza los campos del itinerario y renueva su 'updated_at'"""
     if not ObjectId.is_valid(itinerary_id):
@@ -81,13 +93,14 @@ async def update_itinerary(itinerary_id: str, payload: ItineraryUpdate):
         raise HTTPException(status_code=404, detail="Itinerario no encontrado")
 
     updated_itinerary = await db["itinerary"].find_one({"_id": ObjectId(itinerary_id)})
+    updated_itinerary["_id"] = str(updated_itinerary["_id"])
     return updated_itinerary
 
-@router.put("/{itinerary_id}/share", response_model=ItineraryDetail)
+@router.put("/{itinerary_id}/share", response_model=ItineraryItem)
 async def share_itinerary(
     itinerary_id: str,
     payload: AddUserPayload,
-    user_email: str = Query(..., description="Email del usuario que realiza la acción de compartir")
+    user_email: str = Depends(get_current_user_email)
 ):
     """Añade un nuevo email a la lista 'users' del itinerario si el solicitante tiene permisos"""
     if not ObjectId.is_valid(itinerary_id):
@@ -112,10 +125,44 @@ async def share_itinerary(
         {"_id": ObjectId(itinerary_id)},
         {
             "$addToSet": {"users": payload.email_to_add},
-            "$set": {"updated_at": datetime.utcnow()}
+            "$set": {"updated_at": datetime.now()}
         }
     )
 
     # 4. Devolvemos el itinerario actualizado con los nuevos miembros de la lista
     updated_itinerary = await db["itinerary"].find_one({"_id": ObjectId(itinerary_id)})
+    updated_itinerary["_id"] = str(updated_itinerary["_id"])
     return updated_itinerary
+
+@router.patch("/{itinerary_id}/default")
+async def set_default_itinerary(
+    itinerary_id: str,
+    user_email: str = Depends(get_current_user_email)
+):
+    if not ObjectId.is_valid(itinerary_id):
+        raise HTTPException(status_code=400, detail="ID de itinerario inválido")
+
+    # Validamos que el itinerario al que apunta realmente tiene acceso el usuario
+    itinerario = await db.itinerary.find_one({
+        "_id": ObjectId(itinerary_id),
+        "users": user_email
+    })
+    if not itinerario:
+        raise HTTPException(status_code=404, detail="Itinerario no encontrado o sin acceso")
+
+    ahora = datetime.now()
+
+    # ⚡ OPERACIÓN ATÓMICA DE PREFERENCIAS:
+    # Guarda una única fila por usuario. Si no existe, la crea (upsert=True)
+    await db.user_preferences.update_one(
+        {"user_email": user_email},
+        {
+            "$set": {
+                "default_itinerary_id": itinerary_id,
+                "updated_at": ahora
+            }
+        },
+        upsert=True
+    )
+
+    return {"status": "success", "message": "Tu itinerario predeterminado privado ha sido actualizado"}

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: travel-assistant-backend
+    runtime: python
+    # Definimos la carpeta base para que Render ejecute los comandos desde ahí
+    baseDir: travel_assistant_back
+    # Indicamos que observe solo esta carpeta para los auto-deploys
+    repoFilter: 
+      - travel_assistant_back/**
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DOCS_USERNAME
+        sync: false
+      - key: DOCS_PASSWORD
+        sync: false
+      - key: FRONTEND_URL
+        value: https://albertosapina.github.io

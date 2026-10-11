@@ -11,7 +11,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from starlette import status
 
-from app.routers import chat, itinerary
+from app.routers import itinerary, chat
 from app.database import ping_database
 
 security = HTTPBasic()
@@ -58,7 +58,8 @@ app = FastAPI(
     lifespan=lifespan,  # <-- Vinculamos el gestor de ciclo de vida aquí
     docs_url=None,
     redoc_url=None,
-    openapi_url=None
+    openapi_url=None,
+    redirect_slashes=False
 )
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")

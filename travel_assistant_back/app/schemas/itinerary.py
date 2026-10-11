@@ -1,37 +1,40 @@
-from typing import Optional, Annotated, List
+from datetime import datetime
+from typing import Annotated, List
 
 from pydantic import BaseModel, Field, BeforeValidator
-
-from app.schemas.mongo_base_model import MongoBaseModel
 
 
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
-class ItineraryCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=100, example="Mi viaje a París")
-    content: str = Field(..., example="# Detalles del viaje...")
-    # Recibe el string del email del creador desde el Frontend de Vue
-    creator_email: str = Field(..., example="creador@gmail.com")
+class ItineraryBase(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
+    content: str
 
-class ItineraryUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=100)
-    content: Optional[str] = None
-    # Permite en el futuro añadir o modificar la lista de usuarios con acceso
-    users: Optional[List[str]] = None
+class ItineraryCreate(ItineraryBase):
+    pass
 
+class ItineraryUpdate(ItineraryBase):
+    pass
+
+# Esquema de respuesta para el cliente Vue 3
 class ItineraryListItem(BaseModel):
-    id: PyObjectId = Field(alias="_id")
-    title: str
+    id: str = Field(..., alias="_id")
+    title: str = Field(..., min_length=1, max_length=100)
+    is_default: bool = False
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         populate_by_name = True
 
-class ItineraryDetail(MongoBaseModel):
-    id: PyObjectId = Field(alias="_id")
-    title: str
+class ItineraryItem(BaseModel):
+    id: str = Field(..., alias="_id")
     content: str
-    # La respuesta detallada ahora incluye la lista completa de emails autorizados
-    users: List[str] = Field(default_factory=[])
+    users: List[str]
+    title: str
+    is_default: bool = False
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         populate_by_name = True
