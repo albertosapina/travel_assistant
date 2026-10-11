@@ -8,6 +8,8 @@ import GoogleSignInPlugin from 'vue3-google-signin'
 const app = createApp(App)
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+console.log('Google Client ID configurado:', Boolean(clientId));
+
 app.use(GoogleSignInPlugin, {
   clientId: clientId,
 })
